@@ -1,5 +1,7 @@
-import http from "node:http";
+import express from "express";
 import fs from "node:fs/promises";
+
+const app = express();
 
 const routes = {
     "/": "index.html",
@@ -15,7 +17,7 @@ async function preloadFiles() {
                 .readFile(path, { encoding: "utf8" })
                 .then((data) => [key, data])
                 .catch((err) => {
-                    console.error(err);
+                    console.error(`Error reading ${path}:`, err);
                     return [key, null];
                 })
         )
@@ -24,23 +26,42 @@ async function preloadFiles() {
     return Object.fromEntries(data);
 }
 
-const cachedFiles = preloadFiles();
+async function startServer() {
+    const files = await preloadFiles();
 
-const server = http.createServer(async (req, res) => {
-    const files = await cachedFiles;
+    app.get("/", (req, res) => {
+        if (files["/"]) {
+            res.type("html").send(files["/"]);
+        } else {
+            res.type("json").status(500).send("Server error");
+        }
+    });
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    app.get("/about", (req, res) => {
+        if (files["/about"]) {
+            res.type("html").send(files["/about"]);
+        } else {
+            res.type("json").status(500).send("Server error");
+        }
+    });
 
-    if (files[req.url]) {
-        res.statusCode = 200;
-        res.end(files[req.url]);
-    } else if (req.url in files) {
-        res.statusCode = 500;
-        res.end("Server error");
-    } else {
-        res.statusCode = 404;
-        res.end(files["404"] || "Not found");
-    }
-});
+    app.get("/contact-me", (req, res) => {
+        if (files["/contact-me"]) {
+            res.type("html").send(files["/contact-me"]);
+        } else {
+            res.type("json").status(500).send("Server error");
+        }
+    });
 
-server.listen(8080);
+    app.use((req, res) => {
+        res.status(404)
+            .type("html")
+            .send(files["404"] || "Not Found");
+    });
+
+    app.listen(8080, () => {
+        console.log("Server running on http://localhost:8080");
+    });
+}
+
+startServer();
